@@ -1,0 +1,1853 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>将棋・チェス駒バトルロワイヤル・シミュレーション</title>
+<style>
+  :root {
+    --bg: #15120e;
+    --panel: #211b14;
+    --panel2: #2c241a;
+    --text: #f3eadb;
+    --muted: #c9b99d;
+    --line: rgba(255,255,255,.12);
+    --accent: #f3c06b;
+    --danger: #e36b5d;
+    --ok: #8bcf8b;
+    --wood: #d8a85b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(circle at 20% 0%, rgba(255, 195, 98, .10), transparent 35%),
+      radial-gradient(circle at 80% 20%, rgba(145, 106, 51, .16), transparent 35%),
+      var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", "Yu Gothic UI", "Noto Sans JP", sans-serif;
+  }
+  header {
+    max-width: 1480px;
+    margin: 0 auto;
+    padding: 22px 18px 10px;
+  }
+  h1 {
+    margin: 0 0 8px;
+    font-size: clamp(22px, 3vw, 34px);
+    letter-spacing: .04em;
+  }
+  .subtitle {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.6;
+    font-size: 14px;
+  }
+  main {
+    max-width: 1480px;
+    margin: 0 auto;
+    padding: 10px 18px 26px;
+    display: grid;
+    grid-template-columns: minmax(520px, 760px) minmax(300px, 1fr);
+    gap: 16px;
+    align-items: start;
+  }
+  .board-wrap, .side-panel, .stats-panel {
+    background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.018));
+    border: 1px solid rgba(255,255,255,.11);
+    border-radius: 18px;
+    box-shadow: 0 18px 45px rgba(0,0,0,.32);
+  }
+  .board-wrap {
+    padding: 14px;
+  }
+  .stats-panel {
+    grid-column: 1 / -1;
+    padding: 14px;
+    overflow-x: auto;
+  }
+  #boardCanvas {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    display: block;
+    border-radius: 12px;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.35), 0 12px 30px rgba(0,0,0,.35);
+    background: #c99548;
+    cursor: crosshair;
+  }
+  .controls {
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: repeat(4, auto) 1fr;
+    gap: 9px;
+    align-items: center;
+  }
+  button, select, input[type="range"] {
+    font: inherit;
+  }
+  button {
+    border: 1px solid rgba(255,255,255,.16);
+    background: linear-gradient(180deg, #4a3521, #312217);
+    color: var(--text);
+    border-radius: 10px;
+    padding: 9px 12px;
+    cursor: pointer;
+    transition: transform .05s ease, border-color .15s ease, background .15s ease;
+    white-space: nowrap;
+  }
+  button:hover { border-color: rgba(243,192,107,.65); }
+  button:active { transform: translateY(1px); }
+  button.primary {
+    background: linear-gradient(180deg, #9b6631, #6e401f);
+    border-color: rgba(255,216,142,.5);
+  }
+  .speed-box {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 10px;
+    align-items: center;
+    color: var(--muted);
+    min-width: 220px;
+  }
+  .mode-box {
+    display: grid;
+    grid-template-columns: auto minmax(150px, 1fr);
+    gap: 8px;
+    align-items: center;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  select {
+    border: 1px solid rgba(255,255,255,.16);
+    background: rgba(0,0,0,.24);
+    color: var(--text);
+    border-radius: 10px;
+    padding: 8px 9px;
+  }
+  input[type="range"] { width: 100%; accent-color: var(--accent); }
+  .side-panel {
+    padding: 14px;
+  }
+  .status-card {
+    background: rgba(0,0,0,.20);
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 14px;
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  .status-top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+  .turn {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: .03em;
+  }
+  .winner {
+    color: var(--accent);
+    font-weight: 800;
+    line-height: 1.45;
+  }
+  .tiny { color: var(--muted); font-size: 12px; line-height: 1.45; }
+  .legend {
+    display: grid;
+    gap: 7px;
+  }
+  .team-row {
+    display: grid;
+    grid-template-columns: 28px 1fr auto auto auto;
+    gap: 8px;
+    align-items: center;
+    padding: 7px 8px;
+    border-radius: 10px;
+    background: rgba(255,255,255,.035);
+    border: 1px solid rgba(255,255,255,.055);
+  }
+  .team-row.dead { opacity: .35; }
+  .swatch {
+    width: 24px;
+    height: 24px;
+    border-radius: 7px;
+    border: 1px solid rgba(0,0,0,.45);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.2);
+  }
+  .team-name { font-weight: 800; }
+  .stat-pill {
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+    border: 1px solid rgba(255,255,255,.08);
+    background: rgba(0,0,0,.16);
+    border-radius: 999px;
+    padding: 3px 7px;
+    white-space: nowrap;
+  }
+  .rules {
+    color: var(--muted);
+    line-height: 1.55;
+    font-size: 13px;
+    margin: 0;
+    padding-left: 1.2em;
+  }
+  .log {
+    height: 168px;
+    overflow: auto;
+    padding: 10px;
+    border-radius: 12px;
+    background: rgba(0,0,0,.22);
+    border: 1px solid rgba(255,255,255,.08);
+    font-size: 12px;
+    line-height: 1.55;
+    color: var(--muted);
+  }
+  .log div { padding: 2px 0; border-bottom: 1px dashed rgba(255,255,255,.055); }
+  .inspect {
+    min-height: 54px;
+    color: var(--muted);
+    line-height: 1.55;
+    font-size: 13px;
+  }
+  .kbd {
+    border: 1px solid rgba(255,255,255,.15);
+    background: rgba(0,0,0,.25);
+    border-radius: 5px;
+    padding: 1px 5px;
+    color: var(--text);
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .stats-grid label {
+    display: grid;
+    gap: 4px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  input[type="number"] {
+    width: 100%;
+    border: 1px solid rgba(255,255,255,.16);
+    background: rgba(0,0,0,.24);
+    color: var(--text);
+    border-radius: 9px;
+    padding: 8px 9px;
+    font: inherit;
+  }
+  .stats-buttons {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(140px, 1fr));
+    gap: 8px;
+    margin-top: 9px;
+  }
+  .progress-wrap {
+    margin-top: 10px;
+    height: 10px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: rgba(0,0,0,.28);
+    border: 1px solid rgba(255,255,255,.08);
+  }
+  #statsProgressBar {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #8f5b2c, #f3c06b);
+    transition: width .08s linear;
+  }
+  .stats-summary {
+    margin-top: 9px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5;
+    min-height: 34px;
+  }
+  #statsTable, #allModesTable { overflow-x: auto; }
+  .stats-table {
+    width: 100%;
+    min-width: 980px;
+    border-collapse: collapse;
+    margin-top: 10px;
+    font-size: 12px;
+    overflow: hidden;
+    border-radius: 10px;
+  }
+  .stats-table th, .stats-table td {
+    padding: 6px 5px;
+    border-bottom: 1px solid rgba(255,255,255,.08);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .stats-table th:first-child, .stats-table td:first-child { text-align: left; }
+  .stats-table th {
+    color: var(--text);
+    background: rgba(255,255,255,.06);
+  }
+  .stats-table td {
+    color: var(--muted);
+    background: rgba(0,0,0,.13);
+  }
+
+  @media (max-width: 920px) {
+    main { grid-template-columns: 1fr; }
+    .controls { grid-template-columns: repeat(3, auto) 1fr; }
+  }
+  @media (max-width: 560px) {
+    header, main { padding-left: 10px; padding-right: 10px; }
+    main { gap: 10px; }
+    .board-wrap, .side-panel, .stats-panel { border-radius: 12px; padding: 9px; }
+    .controls { grid-template-columns: 1fr 1fr; }
+    .speed-box, .mode-box { grid-column: 1 / -1; min-width: 0; }
+    .stats-grid, .stats-buttons { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>将棋・チェス駒バトルロワイヤル</h1>
+  <p class="subtitle">18×18のループ盤面。将棋・チェスの駒を混ぜて、将棋/チェスの同種チーム戦・全員敵・チェス軍vs将棋軍を切り替え可能。味方マスには移動不可。長距離駒の射線は端で一旦止まり、ループ後まで延々とは続きません。AIは捕食価値・危険マス・成り直前・次手の攻撃力を評価して動きます。</p>
+</header>
+<main>
+  <section class="board-wrap" aria-label="シミュレーション盤面">
+    <canvas id="boardCanvas" width="900" height="900"></canvas>
+    <div class="controls">
+      <button id="toggleBtn" class="primary">▶ 開始</button>
+      <button id="stepBtn">1手進める</button>
+      <button id="resetBtn">リセット</button>
+      <button id="fastBtn">高速観戦</button>
+      <div class="mode-box">
+        <span>編成</span>
+        <select id="setupMode">
+          <option value="standard">将棋40枚・同種チーム</option>
+          <option value="pair">将棋各2駒・同種チーム</option>
+          <option value="chessStandard">チェス基本数・駒種チーム</option>
+          <option value="chessPair">チェス各2駒・駒種チーム</option>
+          <option value="shogiAllStandard">将棋40駒全員敵</option>
+          <option value="shogiAllPair">将棋各2駒全員敵</option>
+          <option value="chessAllStandard">チェス基本駒全員敵</option>
+          <option value="chessAllPair">チェス各2駒全員敵</option>
+          <option value="chessVsShogiStandard">チェス基本数 vs 将棋基本数</option>
+          <option value="chessVsShogiPair">チェス各2駒 vs 将棋各2駒</option>
+          <option value="mixedAllStandard">チェス基本数＋将棋基本数全員敵</option>
+          <option value="mixedAllPair">チェス各2駒＋将棋各2駒全員敵</option>
+        </select>
+      </div>
+      <div class="speed-box">
+        <span>速度</span>
+        <input id="speed" type="range" min="1" max="60" value="6" />
+        <strong id="speedLabel">6 手/秒</strong>
+      </div>
+    </div>
+  </section>
+
+  <aside class="side-panel">
+    <div class="status-card">
+      <div class="status-top">
+        <div>
+          <div class="tiny">経過</div>
+          <div id="turn" class="turn">0手</div>
+        </div>
+        <div id="winner" class="winner">未決着</div>
+      </div>
+      <div class="tiny">盤面クリックで駒を確認。<span class="kbd">Space</span>開始/停止、<span class="kbd">→</span>1手。</div>
+    </div>
+
+    <div class="status-card">
+      <strong>チーム状況</strong>
+      <div id="legend" class="legend" style="margin-top:10px;"></div>
+    </div>
+
+    <div class="status-card">
+      <strong>採用ルール</strong>
+      <ol class="rules">
+        <li>盤面は9×9の面積4倍＝18×18。端を越えると反対側へループ。</li>
+        <li>飛車・角・香車・クイーン・ルーク・ビショップの長距離移動は端で一旦移動限界。射線はループ後まで続かない。端上の駒が外へ出る場合だけ反対側へ1マス分ループできる。</li>
+        <li>初期配置・向きはランダム。向きは上・右・下・左の4方向。将棋の歩・香・桂・銀・金とチェスのポーンは向きの影響を受ける。</li>
+        <li>同種チーム戦は同じ駒種が味方。全員敵モードは同種でも敵。チェスvs将棋は同じ軍が味方。</li>
+        <li>味方がいるマスには移動できない。射線も味方・敵で止まる。</li>
+        <li>敵同士が同時に同じマスへ入ると、進入した駒は全滅。</li>
+        <li>敵のいるマスへ単独で入ると捕食。移動+1、捕食+3ポイント。</li>
+        <li>将棋の成れる駒とチェスのポーンは10ポイントで自動成り。成り後10回移動すると元に戻る。</li>
+        <li>チェスのポーンは向き方向に1マス前進、斜め前の敵を捕食。ナイトは8方向ジャンプ。</li>
+        <li>駒AIは捕食価値、被攻撃リスク、成りやすさ、次手の攻撃力、味方との進路重複を評価。</li>
+      </ol>
+    </div>
+
+    <div class="status-card">
+      <strong>直近ログ</strong>
+      <div id="log" class="log" style="margin-top:10px;"></div>
+    </div>
+
+    <div class="status-card">
+      <strong>選択マス</strong>
+      <div id="inspect" class="inspect" style="margin-top:8px;">まだ選択されていません。</div>
+    </div>
+  </aside>
+
+
+  <section class="stats-panel" aria-label="高速統計">
+      <strong>高速統計</strong>
+      <div class="tiny" style="margin-top:6px;">描画なしで、現在のモード・同じAI・移動・衝突・成り処理を連続実行します。全員敵モードは駒種別、vsモードは軍別に集計します。統計中は観戦を一時停止します。</div>
+      <div class="stats-grid">
+        <label>試行回数
+          <input id="statsRuns" type="number" min="1" max="10000" step="100" value="1000" />
+        </label>
+        <label>最大手数/試合
+          <input id="statsMaxTurns" type="number" min="50" max="20000" step="100" value="2000" />
+        </label>
+      </div>
+      <div class="stats-buttons">
+        <button id="runStatsBtn" class="primary">現在モードを統計</button>
+        <button id="runAllStatsBtn">全モード順番に統計</button>
+        <button id="copyStatsBtn" disabled>統計をコピー</button>
+        <button id="cancelStatsBtn" disabled>中止</button>
+      </div>
+      <div class="progress-wrap"><div id="statsProgressBar"></div></div>
+      <div id="statsSummary" class="stats-summary">未実行</div>
+      <div id="statsTable"></div>
+      <div id="allModesTable" style="margin-top:10px;"></div>
+    </section>
+</main>
+
+<script>
+(() => {
+  "use strict";
+
+  const BOARD = 18;
+  const SHOGI_TYPES = {
+    K: { family: "shogi", name: "王玉", kanji: "王", promotedKanji: "王", countPerSide: 1, color: "#f2d078", canPromote: false },
+    R: { family: "shogi", name: "飛車", kanji: "飛", promotedKanji: "龍", countPerSide: 1, color: "#78a9f2", canPromote: true },
+    B: { family: "shogi", name: "角行", kanji: "角", promotedKanji: "馬", countPerSide: 1, color: "#b390f4", canPromote: true },
+    G: { family: "shogi", name: "金将", kanji: "金", promotedKanji: "金", countPerSide: 2, color: "#f0a85f", canPromote: false },
+    S: { family: "shogi", name: "銀将", kanji: "銀", promotedKanji: "全", countPerSide: 2, color: "#bcc4c8", canPromote: true },
+    N: { family: "shogi", name: "桂馬", kanji: "桂", promotedKanji: "圭", countPerSide: 2, color: "#72c7b2", canPromote: true },
+    L: { family: "shogi", name: "香車", kanji: "香", promotedKanji: "杏", countPerSide: 2, color: "#bf8a62", canPromote: true },
+    P: { family: "shogi", name: "歩兵", kanji: "歩", promotedKanji: "と", countPerSide: 9, color: "#eadfa4", canPromote: true }
+  };
+  const CHESS_TYPES = {
+    cK: { family: "chess", name: "キング", kanji: "♚", promotedKanji: "♚", countPerSide: 1, color: "#ffe7a8", canPromote: false },
+    cQ: { family: "chess", name: "クイーン", kanji: "♛", promotedKanji: "♛", countPerSide: 1, color: "#ff9fb0", canPromote: false },
+    cR: { family: "chess", name: "ルーク", kanji: "♜", promotedKanji: "♜", countPerSide: 2, color: "#8ec5ff", canPromote: false },
+    cB: { family: "chess", name: "ビショップ", kanji: "♝", promotedKanji: "♝", countPerSide: 2, color: "#c9a5ff", canPromote: false },
+    cN: { family: "chess", name: "ナイト", kanji: "♞", promotedKanji: "♞", countPerSide: 2, color: "#93d7cb", canPromote: false },
+    cP: { family: "chess", name: "ポーン", kanji: "♟", promotedKanji: "♛", countPerSide: 8, color: "#e7e0d0", canPromote: true }
+  };
+  const TYPES = { ...SHOGI_TYPES, ...CHESS_TYPES };
+  const SHOGI_ORDER = ["K", "R", "B", "G", "S", "N", "L", "P"];
+  const CHESS_ORDER = ["cK", "cQ", "cR", "cB", "cN", "cP"];
+  const ALL_TYPE_ORDER = [...SHOGI_ORDER, ...CHESS_ORDER];
+  const FAMILY_INFO = {
+    shogi: { name: "将棋軍", color: "#f3c06b" },
+    chess: { name: "チェス軍", color: "#9fd0ff" }
+  };
+
+  const MODES = {
+    standard: { label: "将棋40枚・同種チーム", teamRule: "type", parts: [{ family: "shogi", countMode: "standard" }] },
+    pair: { label: "将棋各2駒・同種チーム", teamRule: "type", parts: [{ family: "shogi", countMode: "pair" }] },
+    chessStandard: { label: "チェス基本数・駒種チーム", teamRule: "type", parts: [{ family: "chess", countMode: "standard" }] },
+    chessPair: { label: "チェス各2駒・駒種チーム", teamRule: "type", parts: [{ family: "chess", countMode: "pair" }] },
+    shogiAllStandard: { label: "将棋40駒全員敵", teamRule: "individual", parts: [{ family: "shogi", countMode: "standard" }] },
+    shogiAllPair: { label: "将棋各2駒全員敵", teamRule: "individual", parts: [{ family: "shogi", countMode: "pair" }] },
+    chessAllStandard: { label: "チェス基本駒全員敵", teamRule: "individual", parts: [{ family: "chess", countMode: "standard" }] },
+    chessAllPair: { label: "チェス各2駒全員敵", teamRule: "individual", parts: [{ family: "chess", countMode: "pair" }] },
+    chessVsShogiStandard: { label: "チェス基本数 vs 将棋基本数", teamRule: "family", parts: [{ family: "chess", countMode: "standard" }, { family: "shogi", countMode: "standard" }] },
+    chessVsShogiPair: { label: "チェス各2駒 vs 将棋各2駒", teamRule: "family", parts: [{ family: "chess", countMode: "pair" }, { family: "shogi", countMode: "pair" }] },
+    mixedAllStandard: { label: "チェス基本数＋将棋基本数全員敵", teamRule: "individual", parts: [{ family: "chess", countMode: "standard" }, { family: "shogi", countMode: "standard" }] },
+    mixedAllPair: { label: "チェス各2駒＋将棋各2駒全員敵", teamRule: "individual", parts: [{ family: "chess", countMode: "pair" }, { family: "shogi", countMode: "pair" }] }
+  };
+
+  const DIR_NAME = ["上", "右", "下", "左"];
+  const SIDE_MARK = { S: "▲", G: "△", W: "♙", Bk: "♟" };
+  const MAX_LOG = 90;
+  const WAIT_CHANCE = 0.00;
+  const PIECE_VALUE = {
+    K: 9, R: 10, B: 9, G: 7, S: 6, N: 5, L: 4, P: 2,
+    cK: 10, cQ: 12, cR: 9, cB: 7, cN: 7, cP: 2
+  };
+  const PROMOTED_VALUE = { R: 13, B: 12, S: 7, N: 7, L: 7, P: 7, cP: 12 };
+
+  const canvas = document.getElementById("boardCanvas");
+  const ctx = canvas.getContext("2d");
+  const toggleBtn = document.getElementById("toggleBtn");
+  const stepBtn = document.getElementById("stepBtn");
+  const resetBtn = document.getElementById("resetBtn");
+  const fastBtn = document.getElementById("fastBtn");
+  const setupModeInput = document.getElementById("setupMode");
+  const speedInput = document.getElementById("speed");
+  const speedLabel = document.getElementById("speedLabel");
+  const turnEl = document.getElementById("turn");
+  const winnerEl = document.getElementById("winner");
+  const legendEl = document.getElementById("legend");
+  const logEl = document.getElementById("log");
+  const inspectEl = document.getElementById("inspect");
+  const statsRunsInput = document.getElementById("statsRuns");
+  const statsMaxTurnsInput = document.getElementById("statsMaxTurns");
+  const runStatsBtn = document.getElementById("runStatsBtn");
+  const runAllStatsBtn = document.getElementById("runAllStatsBtn");
+  const copyStatsBtn = document.getElementById("copyStatsBtn");
+  const cancelStatsBtn = document.getElementById("cancelStatsBtn");
+  const statsProgressBar = document.getElementById("statsProgressBar");
+  const statsSummaryEl = document.getElementById("statsSummary");
+  const statsTableEl = document.getElementById("statsTable");
+  const allModesTableEl = document.getElementById("allModesTable");
+
+  let pieces = [];
+  let pieceMode = "standard";
+  let turn = 0;
+  let running = false;
+  let accumulator = 0;
+  let lastFrame = performance.now();
+  let selected = null;
+  let logs = [];
+  let marks = [];
+  let gameOver = false;
+  let categoryKills = {};
+  let statsCancelRequested = false;
+  let statsRunning = false;
+  let lastStatsCopyText = "";
+
+  function modeConfig(mode = pieceMode) { return MODES[mode] || MODES.standard; }
+  function currentSetupLabel() { return modeConfig().label; }
+  function wrap(n) { return ((n % BOARD) + BOARD) % BOARD; }
+  function key(x, y) { return `${x},${y}`; }
+  function shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+  function familyOrderForMode(mode = pieceMode) {
+    const out = [];
+    for (const part of modeConfig(mode).parts) if (!out.includes(part.family)) out.push(part.family);
+    return out;
+  }
+  function typeOrderForFamily(family) { return family === "shogi" ? SHOGI_ORDER : CHESS_ORDER; }
+  function activeTypeOrder(mode = pieceMode) {
+    const set = new Set();
+    const out = [];
+    for (const part of modeConfig(mode).parts) {
+      for (const type of typeOrderForFamily(part.family)) {
+        if (!set.has(type)) { set.add(type); out.push(type); }
+      }
+    }
+    return out;
+  }
+  function activeCategoryKeys(mode = pieceMode) {
+    const cfg = modeConfig(mode);
+    if (cfg.teamRule === "family") return familyOrderForMode(mode).map(f => `F:${f}`);
+    return activeTypeOrder(mode).map(t => `T:${t}`);
+  }
+  function categoryForPiece(p) {
+    return modeConfig().teamRule === "family" ? `F:${p.family}` : `T:${p.type}`;
+  }
+  function categoryInfo(cat) {
+    if (cat.startsWith("F:")) {
+      const family = cat.slice(2);
+      return { label: FAMILY_INFO[family].name, color: FAMILY_INFO[family].color, sub: "同じ軍は味方" };
+    }
+    const type = cat.slice(2);
+    const info = TYPES[type];
+    return { label: info.name, color: info.color, sub: typeDescription(type) };
+  }
+  function typeDescription(type) {
+    const info = TYPES[type];
+    const promote = info.canPromote ? ` → ${info.promotedKanji}` : " / 成りなし";
+    return `${info.family === "chess" ? "チェス" : "将棋"} ${info.kanji}${promote}`;
+  }
+  function countPerSide(type, countMode) {
+    return countMode === "pair" ? 1 : TYPES[type].countPerSide;
+  }
+  function teamKeyOfPiece(p) {
+    const rule = modeConfig().teamRule;
+    if (rule === "type") return `T:${p.type}`;
+    if (rule === "family") return `F:${p.family}`;
+    return `I:${p.id}`;
+  }
+  function sameTeam(a, b) { return a && b && teamKeyOfPiece(a) === teamKeyOfPiece(b); }
+  function categoryFromTeamKey(teamKey) {
+    if (!teamKey) return null;
+    if (teamKey.startsWith("T:") || teamKey.startsWith("F:")) return teamKey;
+    if (teamKey.startsWith("I:")) {
+      const id = Number(teamKey.slice(2));
+      const p = pieces.find(q => q.id === id);
+      return p ? categoryForPiece(p) : null;
+    }
+    return null;
+  }
+  function teamNameFromKey(teamKey) {
+    if (!teamKey) return "勝者なし";
+    if (teamKey.startsWith("T:")) return `${TYPES[teamKey.slice(2)].name}チーム`;
+    if (teamKey.startsWith("F:")) return FAMILY_INFO[teamKey.slice(2)].name;
+    if (teamKey.startsWith("I:")) {
+      const id = Number(teamKey.slice(2));
+      const p = pieces.find(q => q.id === id);
+      return p ? `${pieceName(p)} 個体` : `個体${id}`;
+    }
+    return teamKey;
+  }
+  function pieceSideMark(p) { return SIDE_MARK[p.side] || ""; }
+  function pieceGlyph(p) {
+    const info = TYPES[p.type];
+    return p.promoted ? info.promotedKanji : info.kanji;
+  }
+
+  function addLog(text) {
+    logs.unshift(`<span style="color:#f1c778">${turn}手</span> ${text}`);
+    if (logs.length > MAX_LOG) logs.length = MAX_LOG;
+    logEl.innerHTML = logs.map(x => `<div>${x}</div>`).join("");
+  }
+  function mark(x, y, kind, label) {
+    marks.push({ x, y, kind, label, life: 28 });
+    if (marks.length > 70) marks.splice(0, marks.length - 70);
+  }
+
+  function reset(options = {}) {
+    const render = options.render !== false;
+    const writeLog = options.log !== false;
+    pieces = [];
+    turn = 0;
+    logs = [];
+    marks = [];
+    selected = null;
+    gameOver = false;
+    categoryKills = Object.fromEntries(activeCategoryKeys().map(k => [k, 0]));
+
+    const cells = [];
+    for (let y = 0; y < BOARD; y++) for (let x = 0; x < BOARD; x++) cells.push({ x, y });
+    shuffle(cells);
+
+    let id = 1;
+    for (const part of modeConfig().parts) {
+      const sides = part.family === "shogi" ? ["S", "G"] : ["W", "Bk"];
+      for (const side of sides) {
+        for (const type of typeOrderForFamily(part.family)) {
+          for (let i = 0; i < countPerSide(type, part.countMode); i++) {
+            const pos = cells.pop();
+            pieces.push({
+              id: id++, type, family: part.family, side,
+              x: pos.x, y: pos.y,
+              dir: Math.floor(Math.random() * 4),
+              alive: true,
+              promoted: false,
+              promotedMovesLeft: 0,
+              points: 0,
+              kills: 0,
+              moves: 0,
+              blocked: 0
+            });
+          }
+        }
+      }
+    }
+    if (writeLog) {
+      const ruleText = modeConfig().teamRule === "individual" ? "全員敵" : modeConfig().teamRule === "family" ? "軍勢チーム戦" : "同種チーム戦";
+      addLog(`開幕。${currentSetupLabel()}・全${pieces.length}枚、${ruleText}で開始。`);
+    }
+    if (render) { updateUI(); draw(); }
+  }
+
+  function buildOcc() {
+    const occ = new Map();
+    for (const p of pieces) if (p.alive) occ.set(key(p.x, p.y), p);
+    return occ;
+  }
+  function rotateVec(dx, dy, dir) {
+    if (dir === 0) return [dx, dy];
+    if (dir === 1) return [-dy, dx];
+    if (dir === 2) return [-dx, -dy];
+    return [dy, -dx];
+  }
+  function addStepMoves(list, seen, p, occ, vecs, rotate = true) {
+    for (const [dx0, dy0] of vecs) {
+      const [dx, dy] = rotate ? rotateVec(dx0, dy0, p.dir) : [dx0, dy0];
+      const x = wrap(p.x + dx);
+      const y = wrap(p.y + dy);
+      const k = key(x, y);
+      if (seen.has(k)) continue;
+      const target = occ.get(k);
+      if (target && sameTeam(p, target)) continue;
+      seen.add(k);
+      list.push({ x, y, target: target || null });
+    }
+  }
+  function addRayMoves(list, seen, p, occ, dirs, rotate = false) {
+    for (let [dx, dy] of dirs) {
+      if (rotate) [dx, dy] = rotateVec(dx, dy, p.dir);
+      let cx = p.x;
+      let cy = p.y;
+      for (let s = 1; s <= BOARD; s++) {
+        const rawX = cx + dx;
+        const rawY = cy + dy;
+        const crossedEdge = rawX < 0 || rawX >= BOARD || rawY < 0 || rawY >= BOARD;
+        if (crossedEdge && s > 1) break;
+        const x = wrap(rawX);
+        const y = wrap(rawY);
+        if (x === p.x && y === p.y) break;
+        const k = key(x, y);
+        if (seen.has(k)) break;
+        const target = occ.get(k);
+        if (target) {
+          if (!sameTeam(p, target)) {
+            seen.add(k);
+            list.push({ x, y, target });
+          }
+          break;
+        }
+        seen.add(k);
+        list.push({ x, y, target: null });
+        cx = x;
+        cy = y;
+        if (crossedEdge) break;
+      }
+    }
+  }
+  function addChessPawnMoves(list, seen, p, occ) {
+    const [fdx, fdy] = rotateVec(0, -1, p.dir);
+    const fx = wrap(p.x + fdx);
+    const fy = wrap(p.y + fdy);
+    const fKey = key(fx, fy);
+    if (!seen.has(fKey) && !occ.get(fKey)) {
+      seen.add(fKey);
+      list.push({ x: fx, y: fy, target: null });
+    }
+    for (const [dx0, dy0] of [[-1, -1], [1, -1]]) {
+      const [dx, dy] = rotateVec(dx0, dy0, p.dir);
+      const x = wrap(p.x + dx);
+      const y = wrap(p.y + dy);
+      const k = key(x, y);
+      if (seen.has(k)) continue;
+      const target = occ.get(k);
+      if (target && !sameTeam(p, target)) {
+        seen.add(k);
+        list.push({ x, y, target });
+      }
+    }
+  }
+  function goldMoves() { return [[0,-1],[-1,-1],[1,-1],[-1,0],[1,0],[0,1]]; }
+  function legalMoves(p, occ) {
+    const list = [];
+    const seen = new Set();
+    const isGoldLike = p.family === "shogi" && p.promoted && ["P", "L", "N", "S"].includes(p.type);
+
+    if (p.family === "shogi") {
+      if (p.type === "K") addStepMoves(list, seen, p, occ, [[0,-1],[1,-1],[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1]]);
+      else if (p.type === "G" || isGoldLike) addStepMoves(list, seen, p, occ, goldMoves());
+      else if (p.type === "S") addStepMoves(list, seen, p, occ, [[0,-1],[-1,-1],[1,-1],[-1,1],[1,1]]);
+      else if (p.type === "N") addStepMoves(list, seen, p, occ, [[-1,-2],[1,-2]]);
+      else if (p.type === "L") addRayMoves(list, seen, p, occ, [[0,-1]], true);
+      else if (p.type === "P") addStepMoves(list, seen, p, occ, [[0,-1]]);
+      else if (p.type === "R") {
+        addRayMoves(list, seen, p, occ, [[0,-1],[1,0],[0,1],[-1,0]], false);
+        if (p.promoted) addStepMoves(list, seen, p, occ, [[1,-1],[1,1],[-1,1],[-1,-1]], false);
+      } else if (p.type === "B") {
+        addRayMoves(list, seen, p, occ, [[1,-1],[1,1],[-1,1],[-1,-1]], false);
+        if (p.promoted) addStepMoves(list, seen, p, occ, [[0,-1],[1,0],[0,1],[-1,0]], false);
+      }
+    } else {
+      if (p.type === "cK") addStepMoves(list, seen, p, occ, [[0,-1],[1,-1],[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1]], false);
+      else if (p.type === "cQ" || (p.type === "cP" && p.promoted)) {
+        addRayMoves(list, seen, p, occ, [[0,-1],[1,0],[0,1],[-1,0],[1,-1],[1,1],[-1,1],[-1,-1]], false);
+      } else if (p.type === "cR") addRayMoves(list, seen, p, occ, [[0,-1],[1,0],[0,1],[-1,0]], false);
+      else if (p.type === "cB") addRayMoves(list, seen, p, occ, [[1,-1],[1,1],[-1,1],[-1,-1]], false);
+      else if (p.type === "cN") addStepMoves(list, seen, p, occ, [[-1,-2],[1,-2],[-2,-1],[2,-1],[-2,1],[2,1],[-1,2],[1,2]], false);
+      else if (p.type === "cP") addChessPawnMoves(list, seen, p, occ);
+    }
+    return list;
+  }
+
+  function chooseMove(p, moves, ctx, reservedByTeam) {
+    if (!moves.length) return null;
+    if (Math.random() < WAIT_CHANCE) return null;
+    const scored = moves.map(m => ({
+      move: m,
+      score: evaluateMove(p, m, ctx, reservedByTeam) + (Math.random() * 2.4 - 1.2)
+    })).sort((a, b) => b.score - a.score);
+    if (scored.length >= 3 && Math.random() < 0.10) return scored[1 + Math.floor(Math.random() * 2)].move;
+    if (scored.length >= 2 && Math.random() < 0.12) return scored[1].move;
+    return scored[0].move;
+  }
+  function buildAIContext(occ, alive) {
+    const threat = new Map();
+    const categoryCounts = Object.fromEntries(activeCategoryKeys().map(k => [k, 0]));
+    const teamCounts = new Map();
+    for (const p of alive) {
+      const cat = categoryForPiece(p);
+      categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+      const team = teamKeyOfPiece(p);
+      teamCounts.set(team, (teamCounts.get(team) || 0) + 1);
+    }
+    for (const p of alive) {
+      const team = teamKeyOfPiece(p);
+      const moves = legalMoves(p, occ);
+      for (const m of moves) {
+        const k = key(m.x, m.y);
+        if (!threat.has(k)) threat.set(k, new Map());
+        const byTeam = threat.get(k);
+        byTeam.set(team, (byTeam.get(team) || 0) + 1);
+      }
+    }
+    return { threat, alive, categoryCounts, teamCounts, occ };
+  }
+  function pieceValue(p) {
+    if (!p) return 0;
+    if (p.promoted && PROMOTED_VALUE[p.type]) return PROMOTED_VALUE[p.type];
+    return PIECE_VALUE[p.type] || 1;
+  }
+  function torusDistance(x1, y1, x2, y2) {
+    const dx = Math.min(Math.abs(x1 - x2), BOARD - Math.abs(x1 - x2));
+    const dy = Math.min(Math.abs(y1 - y2), BOARD - Math.abs(y1 - y2));
+    return dx + dy;
+  }
+  function threatCountFor(p, x, y, ctx) {
+    const byTeam = ctx.threat.get(key(x, y));
+    if (!byTeam) return 0;
+    const selfTeam = teamKeyOfPiece(p);
+    let n = 0;
+    for (const [team, count] of byTeam.entries()) if (team !== selfTeam) n += count;
+    return n;
+  }
+  function supportCountFor(p, x, y, ctx) {
+    const byTeam = ctx.threat.get(key(x, y));
+    return byTeam ? (byTeam.get(teamKeyOfPiece(p)) || 0) : 0;
+  }
+  function nearestEnemyDistance(p, x, y, ctx) {
+    let best = Infinity;
+    for (const e of ctx.alive) {
+      if (sameTeam(p, e)) continue;
+      best = Math.min(best, torusDistance(x, y, e.x, e.y));
+    }
+    return best === Infinity ? BOARD : best;
+  }
+  function hypotheticalStats(p, move, occ) {
+    const oldX = p.x, oldY = p.y;
+    const target = move.target || null;
+    const tmp = new Map(occ);
+    tmp.delete(key(oldX, oldY));
+    if (target) tmp.delete(key(target.x, target.y));
+    tmp.set(key(move.x, move.y), p);
+    p.x = move.x; p.y = move.y;
+    const nextMoves = legalMoves(p, tmp);
+    p.x = oldX; p.y = oldY;
+    let attackValue = 0;
+    for (const nm of nextMoves) if (nm.target && !sameTeam(p, nm.target) && nm.target !== target) attackValue += pieceValue(nm.target);
+    return { mobility: nextMoves.length, attackValue };
+  }
+  function evaluateMove(p, move, ctx, reservedByTeam) {
+    const target = move.target && !sameTeam(p, move.target) ? move.target : null;
+    const destKey = key(move.x, move.y);
+    let score = 0;
+    const ownTeam = teamKeyOfPiece(p);
+    const reserved = reservedByTeam.get(ownTeam);
+    if (reserved && reserved.has(destKey)) score -= 40;
+
+    if (target) {
+      const v = pieceValue(target);
+      const targetTeam = teamKeyOfPiece(target);
+      const targetTeamLeft = ctx.teamCounts.get(targetTeam) || 1;
+      score += 16 + v * 4.2;
+      if (target.promoted) score += 6;
+      if (targetTeamLeft <= 1) score += 28;
+      else if (targetTeamLeft <= 2) score += 13;
+      if (p.promoted && p.promotedMovesLeft <= 4) score += 8;
+    }
+
+    if (TYPES[p.type].canPromote && !p.promoted) {
+      const afterPoints = p.points + 1 + (target ? 3 : 0);
+      score += afterPoints * 0.65;
+      if (afterPoints >= 10) score += ["P", "cP"].includes(p.type) ? 22 : 16;
+      else if (afterPoints >= 8) score += 6;
+    }
+
+    const danger = threatCountFor(p, move.x, move.y, ctx);
+    const support = supportCountFor(p, move.x, move.y, ctx);
+    const ownLeft = ctx.teamCounts.get(ownTeam) || 1;
+    let dangerPenalty = target ? 3.0 : 5.2;
+    if (ownLeft <= 2) dangerPenalty += 1.6;
+    if (["K", "cK"].includes(p.type)) dangerPenalty += 1.2;
+    score -= danger * dangerPenalty;
+    score += Math.min(5, support * 1.25);
+    if (danger >= support + 2 && !target) score -= 8;
+
+    const hypo = hypotheticalStats(p, move, ctx.occ);
+    score += Math.min(8, hypo.mobility * 0.32);
+    score += Math.min(12, hypo.attackValue * 0.62);
+
+    const near = nearestEnemyDistance(p, move.x, move.y, ctx);
+    if (!target) {
+      if (["P", "G", "S", "N", "K", "cK", "cN", "cP"].includes(p.type)) score += Math.max(0, 6 - near) * 0.65;
+      else score += Math.min(near, 8) * 0.20;
+    }
+    if (["R", "B", "L", "cQ", "cR", "cB"].includes(p.type) && !target) {
+      const travel = torusDistance(p.x, p.y, move.x, move.y);
+      score += Math.min(5, travel * 0.35);
+    }
+    return score;
+  }
+
+  function maybePromote(p, render = true, writeLog = true) {
+    const info = TYPES[p.type];
+    if (!info.canPromote || p.promoted) return;
+    if (p.points >= 10) {
+      p.points -= 10;
+      p.promoted = true;
+      p.promotedMovesLeft = 10;
+      if (writeLog) addLog(`${pieceName(p)} が成りました。`);
+      if (render) mark(p.x, p.y, "promote", "成");
+    }
+  }
+  function pieceName(p) { return `${pieceSideMark(p)}${pieceGlyph(p)}${p.id}`; }
+  function aliveTeamKeys() {
+    const set = new Set();
+    for (const p of pieces) if (p.alive) set.add(teamKeyOfPiece(p));
+    return [...set];
+  }
+
+  function simulationStep(options = {}) {
+    const render = options.render !== false;
+    const writeLog = options.log !== false;
+    if (gameOver) return;
+    turn++;
+    const occ = buildOcc();
+    const plans = new Map();
+    const alive = pieces.filter(p => p.alive);
+    const aiContext = buildAIContext(occ, alive);
+    const reservedByTeam = new Map();
+
+    for (const p of shuffle(alive.slice())) {
+      const moves = legalMoves(p, occ);
+      const move = chooseMove(p, moves, aiContext, reservedByTeam);
+      if (!move) {
+        plans.set(p.id, { piece: p, fromX: p.x, fromY: p.y, toX: p.x, toY: p.y, moving: false, blocked: false, killedTargets: [] });
+      } else {
+        const team = teamKeyOfPiece(p);
+        if (!reservedByTeam.has(team)) reservedByTeam.set(team, new Set());
+        reservedByTeam.get(team).add(key(move.x, move.y));
+        plans.set(p.id, { piece: p, fromX: p.x, fromY: p.y, toX: move.x, toY: move.y, moving: true, blocked: false, killedTargets: [] });
+      }
+    }
+
+    let groups = groupMovingPlans(plans, () => true);
+    for (const group of groups.values()) {
+      if (group.length <= 1) continue;
+      const teams = new Set(group.map(g => teamKeyOfPiece(g.piece)));
+      if (teams.size === 1) {
+        for (const pl of group) {
+          pl.moving = false;
+          pl.blocked = true;
+          pl.toX = pl.fromX;
+          pl.toY = pl.fromY;
+          pl.piece.blocked++;
+        }
+        if (Math.random() < 0.2 && writeLog) addLog(`${teamNameFromKey(teamKeyOfPiece(group[0].piece))} が味方同士の進路重複で足止め。`);
+      }
+    }
+
+    const endpointDead = new Set();
+    groups = groupMovingPlans(plans, p => p.moving);
+    for (const group of groups.values()) {
+      if (group.length <= 1) continue;
+      const teams = new Set(group.map(g => teamKeyOfPiece(g.piece)));
+      if (teams.size > 1) {
+        for (const pl of group) endpointDead.add(pl.piece.id);
+        const names = group.slice(0, 4).map(pl => pieceName(pl.piece)).join("・") + (group.length > 4 ? `ほか${group.length - 4}枚` : "");
+        if (writeLog) addLog(`${names} が同時衝突して消滅。`);
+        if (render) mark(group[0].toX, group[0].toY, "death", "相");
+      }
+    }
+
+    const killedBy = new Map();
+    for (const pl of plans.values()) {
+      const p = pl.piece;
+      if (!pl.moving || endpointDead.has(p.id)) continue;
+      const target = occ.get(key(pl.toX, pl.toY));
+      if (target && target.id !== p.id && !sameTeam(p, target) && !endpointDead.has(target.id)) {
+        killedBy.set(target.id, p.id);
+        pl.killedTargets.push(target.id);
+      }
+    }
+
+    for (const id of endpointDead) {
+      const p = pieces.find(q => q.id === id);
+      if (p && p.alive) {
+        p.alive = false;
+        if (render) mark(p.x, p.y, "death", "×");
+      }
+    }
+    for (const [victimId, attackerId] of killedBy.entries()) {
+      const victim = pieces.find(q => q.id === victimId);
+      const attacker = pieces.find(q => q.id === attackerId);
+      if (!victim || !attacker || !victim.alive) continue;
+      victim.alive = false;
+      attacker.kills++;
+      const cat = categoryForPiece(attacker);
+      categoryKills[cat] = (categoryKills[cat] || 0) + 1;
+      if (render) mark(victim.x, victim.y, "death", "喰");
+      if (writeLog) addLog(`${pieceName(attacker)} が ${pieceName(victim)} を捕食。`);
+    }
+
+    for (const pl of plans.values()) {
+      const p = pl.piece;
+      if (!p.alive || !pl.moving || pl.blocked) continue;
+      p.x = pl.toX;
+      p.y = pl.toY;
+      p.moves++;
+      if (p.promoted) {
+        p.promotedMovesLeft--;
+        if (p.promotedMovesLeft <= 0) {
+          p.promoted = false;
+          p.promotedMovesLeft = 0;
+          p.points = 0;
+          if (writeLog) addLog(`${pieceName(p)} が成り解除。`);
+          if (render) mark(p.x, p.y, "revert", "戻");
+        }
+      } else {
+        p.points += 1 + pl.killedTargets.length * 3;
+        maybePromote(p, render, writeLog);
+      }
+    }
+
+    marks.forEach(m => m.life--);
+    marks = marks.filter(m => m.life > 0);
+
+    const teams = aliveTeamKeys();
+    if (teams.length <= 1) {
+      gameOver = true;
+      running = false;
+      if (render) toggleBtn.textContent = "▶ 開始";
+      const winner = teams[0];
+      if (winner) {
+        if (writeLog) addLog(`${teamNameFromKey(winner)} の勝利。`);
+      } else {
+        if (writeLog) addLog("全滅。勝者なし。巨大な相打ちで終局。");
+      }
+    }
+    if (render) { updateUI(); draw(); }
+  }
+  function groupMovingPlans(plans, predicate) {
+    const groups = new Map();
+    for (const pl of plans.values()) {
+      if (!pl.moving || !predicate(pl)) continue;
+      const k = key(pl.toX, pl.toY);
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(pl);
+    }
+    return groups;
+  }
+
+  function updateUI() {
+    turnEl.textContent = `${turn}手`;
+    speedLabel.textContent = `${speedInput.value} 手/秒`;
+    const teams = aliveTeamKeys();
+    if (gameOver) winnerEl.textContent = teams.length === 1 ? `${teamNameFromKey(teams[0])} 勝利` : "全滅決着";
+    else winnerEl.textContent = `${teams.length}勢力生存`;
+
+    const html = activeCategoryKeys().map(cat => {
+      const info = categoryInfo(cat);
+      const aliveCount = pieces.filter(p => p.alive && categoryForPiece(p) === cat).length;
+      const total = pieces.filter(p => categoryForPiece(p) === cat).length;
+      const promoted = pieces.filter(p => p.alive && categoryForPiece(p) === cat && p.promoted).length;
+      const deadClass = aliveCount ? "" : " dead";
+      return `
+        <div class="team-row${deadClass}">
+          <div class="swatch" style="background:${info.color}"></div>
+          <div>
+            <div class="team-name">${info.label}</div>
+            <div class="tiny">${info.sub}</div>
+          </div>
+          <div class="stat-pill">生 ${aliveCount}/${total}</div>
+          <div class="stat-pill">成 ${promoted}</div>
+          <div class="stat-pill">喰 ${categoryKills[cat] || 0}</div>
+        </div>`;
+    }).join("");
+    legendEl.innerHTML = html;
+    if (selected) inspectSelected();
+  }
+
+  function resizeCanvas() {
+    const rect = canvas.getBoundingClientRect();
+    const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    const size = Math.floor(rect.width * dpr);
+    if (canvas.width !== size || canvas.height !== size) { canvas.width = size; canvas.height = size; draw(); }
+  }
+  function draw() {
+    const w = canvas.width;
+    const h = canvas.height;
+    const cell = w / BOARD;
+    ctx.clearRect(0, 0, w, h);
+
+    const bg = ctx.createLinearGradient(0, 0, w, h);
+    bg.addColorStop(0, "#e3b468");
+    bg.addColorStop(.55, "#c89144");
+    bg.addColorStop(1, "#e0ad62");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, w, h);
+
+    ctx.save();
+    ctx.globalAlpha = .12;
+    for (let i = 0; i < 42; i++) {
+      ctx.beginPath();
+      const y = (i / 41) * h + Math.sin(i * 1.7 + turn * .02) * cell * .2;
+      ctx.moveTo(0, y);
+      ctx.bezierCurveTo(w * .25, y + Math.sin(i) * 14, w * .65, y - Math.cos(i) * 18, w, y + Math.sin(i * .6) * 12);
+      ctx.strokeStyle = i % 2 ? "#70471f" : "#fff2c0";
+      ctx.lineWidth = Math.max(1, cell * .04);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    for (let y = 0; y < BOARD; y++) for (let x = 0; x < BOARD; x++) {
+      if ((x + y) % 2 === 0) { ctx.fillStyle = "rgba(255,255,255,.045)"; ctx.fillRect(x * cell, y * cell, cell, cell); }
+    }
+    ctx.strokeStyle = "rgba(62,35,14,.55)";
+    ctx.lineWidth = Math.max(1, cell * .025);
+    for (let i = 0; i <= BOARD; i++) {
+      ctx.beginPath();
+      ctx.moveTo(i * cell, 0); ctx.lineTo(i * cell, h);
+      ctx.moveTo(0, i * cell); ctx.lineTo(w, i * cell);
+      ctx.stroke();
+    }
+
+    ctx.save();
+    ctx.globalAlpha = .32;
+    ctx.fillStyle = "#2b1b0c";
+    ctx.font = `${cell * .42}px serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (let i = 2; i < BOARD; i += 4) {
+      ctx.fillText("↔", (i + .5) * cell, cell * .35);
+      ctx.fillText("↔", (i + .5) * cell, h - cell * .35);
+      ctx.fillText("↕", cell * .35, (i + .5) * cell);
+      ctx.fillText("↕", w - cell * .35, (i + .5) * cell);
+    }
+    ctx.restore();
+
+    if (selected) {
+      ctx.save();
+      ctx.fillStyle = "rgba(255,245,180,.22)";
+      ctx.strokeStyle = "rgba(255,255,255,.65)";
+      ctx.lineWidth = Math.max(2, cell * .06);
+      ctx.fillRect(selected.x * cell, selected.y * cell, cell, cell);
+      ctx.strokeRect(selected.x * cell + 1, selected.y * cell + 1, cell - 2, cell - 2);
+      ctx.restore();
+    }
+
+    const alive = pieces.filter(p => p.alive).sort((a, b) => (a.y - b.y) || (a.x - b.x) || (a.id - b.id));
+    for (const p of alive) drawPiece(p, cell);
+    drawMarks(cell);
+  }
+  function drawPiece(p, cell) {
+    if (p.family === "chess") drawChessPiece(p, cell);
+    else drawShogiPiece(p, cell);
+  }
+  function drawShogiPiece(p, cell) {
+    const cx = (p.x + .5) * cell;
+    const cy = (p.y + .5) * cell;
+    const r = cell * .43;
+    const info = TYPES[p.type];
+    const angle = p.dir * Math.PI / 2;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(angle);
+    ctx.beginPath(); piecePath(r, cell * .04, cell * .06);
+    ctx.fillStyle = "rgba(0,0,0,.28)"; ctx.fill();
+    ctx.beginPath(); piecePath(r, 0, 0);
+    const grad = ctx.createLinearGradient(0, -r, 0, r);
+    grad.addColorStop(0, shade(info.color, 28)); grad.addColorStop(.58, info.color); grad.addColorStop(1, shade(info.color, -18));
+    ctx.fillStyle = grad; ctx.fill();
+    ctx.lineWidth = Math.max(1, cell * .035);
+    ctx.strokeStyle = p.promoted ? "#8e1f1b" : "rgba(34,21,9,.86)"; ctx.stroke();
+    if (p.promoted) {
+      ctx.beginPath(); ctx.arc(0, 0, r * .66, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(174,34,28,.65)"; ctx.lineWidth = Math.max(1, cell * .045); ctx.stroke();
+    }
+    ctx.fillStyle = p.promoted ? "#a71d18" : "#1d1308";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.font = `900 ${Math.max(12, cell * .48)}px "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif`;
+    ctx.fillText(pieceGlyph(p), 0, cell * .02);
+    ctx.font = `700 ${Math.max(7, cell * .19)}px system-ui, sans-serif`;
+    ctx.fillStyle = "rgba(30,20,10,.78)";
+    ctx.fillText(pieceSideMark(p), -r * .52, r * .42);
+    const small = p.promoted ? p.promotedMovesLeft : p.points;
+    ctx.fillText(String(small), r * .50, r * .42);
+    ctx.restore();
+  }
+  function drawChessPiece(p, cell) {
+    const cx = (p.x + .5) * cell;
+    const cy = (p.y + .5) * cell;
+    const r = cell * .40;
+    const info = TYPES[p.type];
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.beginPath();
+    ctx.ellipse(cell * .04, cell * .06, r * .95, r * .78, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(0,0,0,.25)"; ctx.fill();
+    const grad = ctx.createRadialGradient(-r * .35, -r * .45, r * .12, 0, 0, r);
+    grad.addColorStop(0, shade(info.color, 36)); grad.addColorStop(.65, info.color); grad.addColorStop(1, shade(info.color, -25));
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fillStyle = grad; ctx.fill();
+    ctx.lineWidth = Math.max(1, cell * .035);
+    ctx.strokeStyle = p.promoted ? "#8e1f1b" : "rgba(20,20,25,.88)"; ctx.stroke();
+    ctx.save();
+    ctx.rotate(p.dir * Math.PI / 2);
+    ctx.beginPath(); ctx.moveTo(0, -r * 1.06); ctx.lineTo(r * .16, -r * .76); ctx.lineTo(-r * .16, -r * .76); ctx.closePath();
+    ctx.fillStyle = "rgba(20,20,25,.65)"; ctx.fill();
+    ctx.restore();
+    if (p.promoted) {
+      ctx.beginPath(); ctx.arc(0, 0, r * .70, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(174,34,28,.7)"; ctx.lineWidth = Math.max(1, cell * .045); ctx.stroke();
+    }
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.font = `900 ${Math.max(14, cell * .62)}px "Segoe UI Symbol", "Noto Sans Symbols", serif`;
+    ctx.fillStyle = p.side === "W" ? "#fffaf0" : "#17130f";
+    ctx.strokeStyle = p.side === "W" ? "rgba(30,20,10,.85)" : "rgba(255,255,255,.45)";
+    ctx.lineWidth = Math.max(1, cell * .025);
+    ctx.strokeText(pieceGlyph(p), 0, cell * .01);
+    ctx.fillText(pieceGlyph(p), 0, cell * .01);
+    ctx.font = `700 ${Math.max(7, cell * .17)}px system-ui, sans-serif`;
+    ctx.fillStyle = p.side === "W" ? "#fffaf0" : "#17130f";
+    const small = p.promoted ? p.promotedMovesLeft : p.points;
+    ctx.fillText(String(small), r * .55, r * .55);
+    ctx.restore();
+  }
+  function piecePath(r, ox, oy) {
+    const pts = [[0, -r * 1.05], [r * .72, -r * .44], [r * .58, r * .82], [-r * .58, r * .82], [-r * .72, -r * .44]];
+    ctx.moveTo(pts[0][0] + ox, pts[0][1] + oy);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0] + ox, pts[i][1] + oy);
+    ctx.closePath();
+  }
+  function shade(hex, amt) {
+    const n = parseInt(hex.slice(1), 16);
+    let r = (n >> 16) + amt, g = ((n >> 8) & 255) + amt, b = (n & 255) + amt;
+    r = Math.max(0, Math.min(255, r)); g = Math.max(0, Math.min(255, g)); b = Math.max(0, Math.min(255, b));
+    return `rgb(${r},${g},${b})`;
+  }
+  function drawMarks(cell) {
+    for (const m of marks) {
+      const alpha = Math.max(0, Math.min(1, m.life / 28));
+      const cx = (m.x + .5) * cell, cy = (m.y + .5) * cell;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.font = `900 ${cell * .55}px system-ui, sans-serif`;
+      if (m.kind === "death") {
+        ctx.fillStyle = "rgba(140,20,16,.88)";
+        ctx.beginPath(); ctx.arc(cx, cy, cell * .36 * alpha, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = "#fff6df";
+      } else if (m.kind === "promote") ctx.fillStyle = "rgba(255,235,150,.84)";
+      else ctx.fillStyle = "rgba(255,255,255,.72)";
+      ctx.fillText(m.label, cx, cy);
+      ctx.restore();
+    }
+  }
+
+  function inspectSelected() {
+    if (!selected) return;
+    const found = pieces.filter(q => q.alive && q.x === selected.x && q.y === selected.y);
+    const p = found[0];
+    if (!p) { inspectEl.innerHTML = `(${selected.x + 1}, ${selected.y + 1})：空きマス`; return; }
+    const moves = legalMoves(p, buildOcc());
+    inspectEl.innerHTML = `
+      (${selected.x + 1}, ${selected.y + 1})：<b>${pieceName(p)}</b> / ${teamNameFromKey(teamKeyOfPiece(p))}<br>
+      駒種：${TYPES[p.type].name}、向き：${DIR_NAME[p.dir]}、状態：${p.promoted ? `<b style="color:#f1c778">成り</b> 残り${p.promotedMovesLeft}移動` : `通常 ${p.points}/10pt`}<br>
+      合法手：${moves.length}、移動：${p.moves}、捕食：${p.kills}
+    `;
+  }
+
+  function snapshotState() {
+    return {
+      pieces: pieces.map(p => ({ ...p })), pieceMode, turn, running, accumulator,
+      selected: selected ? { ...selected } : null,
+      logs: logs.slice(), marks: marks.map(m => ({ ...m })), gameOver,
+      categoryKills: { ...categoryKills }
+    };
+  }
+  function restoreState(state) {
+    pieces = state.pieces.map(p => ({ ...p }));
+    pieceMode = state.pieceMode || "standard";
+    setupModeInput.value = pieceMode;
+    turn = state.turn;
+    running = false;
+    accumulator = state.accumulator;
+    selected = state.selected ? { ...state.selected } : null;
+    logs = state.logs.slice();
+    marks = state.marks.map(m => ({ ...m }));
+    gameOver = state.gameOver;
+    categoryKills = { ...state.categoryKills };
+    updateUI();
+    logEl.innerHTML = logs.map(x => `<div>${x}</div>`).join("");
+    draw();
+  }
+  function initialCategoryCounts(mode = pieceMode) {
+    const counts = Object.fromEntries(activeCategoryKeys(mode).map(cat => [cat, 0]));
+    const cfg = modeConfig(mode);
+    for (const part of cfg.parts) {
+      const sides = 2;
+      for (const type of typeOrderForFamily(part.family)) {
+        const n = countPerSide(type, part.countMode) * sides;
+        const cat = cfg.teamRule === "family" ? `F:${part.family}` : `T:${type}`;
+        counts[cat] = (counts[cat] || 0) + n;
+      }
+    }
+    return counts;
+  }
+  function blankCatStats() {
+    return {
+      wins: 0,
+      kills: 0,
+      top2: 0,
+      top3: 0,
+      survivalGames: 0,
+      survivalSum: 0,
+      promotedWins: 0,
+      winTurnsSum: 0,
+      winKillsSum: 0,
+      winRemainingSum: 0,
+      bestKills: 0,
+      bestRemaining: 0,
+      zeroKillGames: 0
+    };
+  }
+  function blankStatsForMode(mode = pieceMode) {
+    const cats = Object.fromEntries(activeCategoryKeys(mode).map(cat => [cat, blankCatStats()]));
+    return { cats, draws: 0, timeouts: 0, totalTurns: 0, longest: 0, shortest: Infinity };
+  }
+  function categoryRowsFromStats(stats, completed, mode = pieceMode) {
+    const initialCounts = initialCategoryCounts(mode);
+    return activeCategoryKeys(mode).map(cat => {
+      const s = stats.cats[cat] || blankCatStats();
+      const info = categoryInfo(cat);
+      const initial = initialCounts[cat] || 0;
+      const avgRemain = s.survivalSum / Math.max(1, completed);
+      return {
+        cat,
+        label: info.label,
+        color: info.color,
+        initial,
+        wins: s.wins,
+        winRate: completed ? s.wins / completed : 0,
+        top2: s.top2,
+        top2Rate: completed ? s.top2 / completed : 0,
+        top3: s.top3,
+        top3Rate: completed ? s.top3 / completed : 0,
+        survivalGames: s.survivalGames,
+        survivalRate: completed ? s.survivalGames / completed : 0,
+        avgKills: s.kills / Math.max(1, completed),
+        bestKills: s.bestKills,
+        avgRemain,
+        avgLost: Math.max(0, initial - avgRemain),
+        bestRemaining: s.bestRemaining,
+        promotedWins: s.promotedWins,
+        promotedWinRate: s.wins ? s.promotedWins / s.wins : 0,
+        avgWinTurns: s.wins ? s.winTurnsSum / s.wins : 0,
+        avgWinKills: s.wins ? s.winKillsSum / s.wins : 0,
+        avgWinRemain: s.wins ? s.winRemainingSum / s.wins : 0,
+        zeroKillGames: s.zeroKillGames
+      };
+    }).sort((a, b) => b.winRate - a.winRate || b.wins - a.wins || b.avgKills - a.avgKills);
+  }
+  function finishOrderFromCurrentGame() {
+    return activeCategoryKeys()
+      .map(cat => ({ cat, alive: pieces.filter(p => p.alive && categoryForPiece(p) === cat).length }))
+      .filter(x => x.alive > 0)
+      .sort((a, b) => b.alive - a.alive)
+      .map(x => x.cat);
+  }
+  function runOneHeadlessGame(maxTurns) {
+    reset({ render: false, log: false });
+    while (!gameOver && turn < maxTurns) simulationStep({ render: false, log: false });
+    const teams = aliveTeamKeys();
+    const winnerTeam = teams.length === 1 ? teams[0] : null;
+    const winnerCategory = categoryFromTeamKey(winnerTeam);
+    const remaining = Object.fromEntries(activeCategoryKeys().map(cat => [cat, pieces.filter(p => p.alive && categoryForPiece(p) === cat).length]));
+    const promotedRemaining = Object.fromEntries(activeCategoryKeys().map(cat => [cat, pieces.filter(p => p.alive && categoryForPiece(p) === cat && p.promoted).length]));
+    return {
+      winnerCategory,
+      timeout: !gameOver,
+      turns: turn,
+      kills: { ...categoryKills },
+      remaining,
+      promotedRemaining,
+      finishOrder: finishOrderFromCurrentGame()
+    };
+  }
+  function pct(n, d) { return d ? `${(n / d * 100).toFixed(1)}%` : "0.0%"; }
+  function copyCell(value) {
+    return String(value).replace(/\|/g, "／").replace(/\n/g, " ");
+  }
+  function markdownTable(headers, rows) {
+    return [
+      `| ${headers.map(copyCell).join(" | ")} |`,
+      `| ${headers.map(() => "---").join(" | ")} |`,
+      ...rows.map(row => `| ${row.map(copyCell).join(" | ")} |`)
+    ].join("\n");
+  }
+  function formatRankForCopy(row, completed) {
+    return row ? `${row.label} ${row.wins}勝 ${pct(row.wins, completed)} 平均捕食${row.avgKills.toFixed(2)} 平均残数${row.avgRemain.toFixed(2)}` : "-";
+  }
+  function teamRuleDescription(rule) {
+    if (rule === "type") return "同種チーム戦。同じ駒種は味方。";
+    if (rule === "individual") return "全員敵。同じ駒種・同じ軍でも敵。";
+    if (rule === "family") return "軍勢チーム戦。チェス軍と将棋軍で分かれ、同じ軍は味方。";
+    return rule;
+  }
+  function familyNameForCopy(family) {
+    return family === "shogi" ? "将棋" : family === "chess" ? "チェス" : family;
+  }
+  function countModeNameForCopy(countMode) {
+    return countMode === "pair" ? "各2駒（各サイド1枚ずつ）" : "基本数";
+  }
+  function modeLineForCopy(modeKey) {
+    const cfg = modeConfig(modeKey);
+    const parts = cfg.parts.map(part => `${familyNameForCopy(part.family)}:${countModeNameForCopy(part.countMode)}`).join(" + ");
+    return `${cfg.label}: ${teamRuleDescription(cfg.teamRule)} / ${parts}`;
+  }
+  function formatRuleSpecCopy(mode = null) {
+    const modeKeys = mode ? [mode] : Object.keys(MODES);
+    const modeLines = modeKeys.map(m => `- ${modeLineForCopy(m)}`).join("\n");
+    return [
+      "# ルール仕様",
+      "## 盤面・初期配置",
+      "- 盤面は18×18。9×9将棋盤の面積4倍。",
+      "- 端を越える移動は反対側へループする。",
+      "- 初期配置は全駒ランダム。初期状態では同じマスに複数駒は置かない。",
+      "- 向きは上・右・下・左からランダム。将棋の歩・香・桂・銀・金、チェスのポーンなど向き依存の駒は、その向きを基準に動く。",
+      "",
+      "## 長距離移動",
+      "- 飛車・角行・香車・クイーン・ルーク・ビショップの長距離移動は、盤端で一旦移動限界になる。",
+      "- 射線はループ後まで延々とは続かない。",
+      "- 端上の駒が外向きに動く場合だけ、反対側へ1マス分ループして停止できる。",
+      "- 射線上に駒がいる場合は、味方・敵どちらでもそこで止まる。",
+      "",
+      "## チーム・衝突・捕食",
+      "- 同種チーム戦では同じ駒種が味方。",
+      "- 全員敵モードでは同種でも敵。",
+      "- チェスvs将棋モードでは同じ軍が味方。",
+      "- 味方がいるマスには移動できない。仲間同士で重ならない。",
+      "- 全駒は同時に移動先を決め、同時に移動する。",
+      "- 敵同士が同時に同じマスへ進入した場合、その進入した敵駒は全滅する。",
+      "- 止まっている敵のマスへ単独で入った場合、移動した側が敵を捕食する。",
+      "",
+      "## 成り・ポイント",
+      "- 1回移動で+1ポイント、敵捕食でさらに+3ポイント。",
+      "- 将棋の成れる駒とチェスのポーンは10ポイントで自動的に成る。",
+      "- 成り後は10回動くと元の駒に戻る。",
+      "- チェスのポーンは成ると一時的にクイーン相当になる。",
+      "",
+      "## チェス駒の扱い",
+      "- キングは全方向1マス。クイーンは縦横斜めの長距離。ルークは縦横長距離。ビショップは斜め長距離。ナイトは8方向ジャンプ。",
+      "- ポーンは向き方向へ1マス前進し、斜め前の敵を捕食できる。",
+      "",
+      "## AI",
+      "- 駒AIは捕食価値、被攻撃リスク、成りやすさ、成り残り手数、次手の攻撃力、味方との進路重複を評価して移動先を選ぶ。",
+      "- 高速統計は描画なしだが、通常観戦と同じAI・移動・衝突・成り処理を使う。",
+      "",
+      "## 対象モード",
+      modeLines,
+      "",
+      "## 統計列の意味",
+      "- 勝率: 全試合に対するその集計単位の勝利割合。",
+      "- Top2 / Top3: 最終生存数ランキングで2位以内・3位以内に入った回数。",
+      "- 最終生存: 決着時または打ち切り時に1枚以上残っていた回数。",
+      "- 平均捕食: 全試合平均の捕食数。",
+      "- 平均残数: 全試合平均の最終残存数。",
+      "- 勝利時手数・捕食・残数: 勝った試合だけで平均した値。",
+      "- 成り勝ち: 勝利時に成り状態の駒が1枚以上残っていた勝利回数。",
+      "- 勝者なし: 全滅または最大手数打ち切りで単独勝者が出なかった試合。"
+    ].join("\n");
+  }
+  function formatSingleStatsCopy(stats, completed, elapsedMs, maxTurns, mode = pieceMode, includeRules = true) {
+    const avgTurns = completed ? stats.totalTurns / completed : 0;
+    const speed = elapsedMs > 0 ? completed / (elapsedMs / 1000) : 0;
+    const shortest = stats.shortest === Infinity ? 0 : stats.shortest;
+    const noWinner = stats.draws + stats.timeouts;
+    const headers = ["集計", "初期数", "勝", "勝率", "生存Top2", "Top2率", "生存Top3", "Top3率", "最終生存", "最終生存率", "平均捕食", "最多捕食", "平均残数", "平均消滅", "勝利時手数", "勝利時捕食", "勝利時残数", "成り勝ち", "成り勝ち率"];
+    const rows = categoryRowsFromStats(stats, completed, mode).map(row => [
+      row.label,
+      row.initial,
+      row.wins,
+      pct(row.wins, completed),
+      row.top2,
+      pct(row.top2, completed),
+      row.top3,
+      pct(row.top3, completed),
+      row.survivalGames,
+      pct(row.survivalGames, completed),
+      row.avgKills.toFixed(2),
+      row.bestKills,
+      row.avgRemain.toFixed(2),
+      row.avgLost.toFixed(2),
+      row.avgWinTurns ? row.avgWinTurns.toFixed(1) : "-",
+      row.avgWinKills ? row.avgWinKills.toFixed(2) : "-",
+      row.avgWinRemain ? row.avgWinRemain.toFixed(2) : "-",
+      row.promotedWins,
+      pct(row.promotedWins, Math.max(1, row.wins))
+    ]);
+    const body = [
+      `# ${modeConfig(mode).label} 統計`,
+      `試合数: ${completed}`,
+      `平均手数: ${avgTurns.toFixed(1)} / 最短: ${shortest} / 最長: ${stats.longest}`,
+      `全滅: ${stats.draws} / 最大${maxTurns}手打ち切り: ${stats.timeouts} / 勝者なし: ${noWinner} (${pct(noWinner, completed)})`,
+      `処理速度: ${speed.toFixed(1)}試合/秒`,
+      "",
+      markdownTable(headers, rows)
+    ].join("\n");
+    return includeRules ? [formatRuleSpecCopy(mode), "", body].join("\n") : body;
+  }
+  function formatAllModesCopy(results, totalModes, totalElapsedMs, runs, maxTurns, cancelled = false) {
+    const totalGames = results.reduce((sum, r) => sum + r.completed, 0);
+    const totalSpeed = totalElapsedMs > 0 ? totalGames / (totalElapsedMs / 1000) : 0;
+    const summaryRows = [];
+    for (const result of results) {
+      const ranking = categoryRowsFromStats(result.stats, result.completed, result.mode);
+      const avgTurns = result.completed ? result.stats.totalTurns / result.completed : 0;
+      const noWinner = result.stats.draws + result.stats.timeouts;
+      ranking.forEach((row, idx) => {
+        summaryRows.push([
+          modeConfig(result.mode).label,
+          idx + 1,
+          row.label,
+          row.initial,
+          row.wins,
+          pct(row.wins, result.completed),
+          row.top2,
+          pct(row.top2, result.completed),
+          row.top3,
+          pct(row.top3, result.completed),
+          row.survivalGames,
+          pct(row.survivalGames, result.completed),
+          row.avgKills.toFixed(2),
+          row.bestKills,
+          row.avgRemain.toFixed(2),
+          row.avgWinTurns ? row.avgWinTurns.toFixed(1) : "-",
+          row.avgWinKills ? row.avgWinKills.toFixed(2) : "-",
+          row.avgWinRemain ? row.avgWinRemain.toFixed(2) : "-",
+          row.promotedWins,
+          pct(row.promotedWins, Math.max(1, row.wins)),
+          avgTurns.toFixed(1),
+          `${noWinner} (${pct(noWinner, result.completed)})`,
+          result.stats.draws,
+          result.stats.timeouts,
+          (result.elapsed > 0 ? result.completed / (result.elapsed / 1000) : 0).toFixed(1)
+        ]);
+      });
+    }
+    const parts = [
+      formatRuleSpecCopy(null),
+      "",
+      `# 全モード統計まとめ${cancelled ? "（途中結果）" : ""}`,
+      `完了モード: ${results.length}/${totalModes}`,
+      `1モード試合数: ${runs}`,
+      `総試合数: ${totalGames}`,
+      `最大手数: ${maxTurns}`,
+      `全体処理速度: ${totalSpeed.toFixed(1)}試合/秒`,
+      "",
+      markdownTable(["モード", "順位", "集計", "初期数", "勝", "勝率", "Top2", "Top2率", "Top3", "Top3率", "最終生存", "最終生存率", "平均捕食", "最多捕食", "平均残数", "勝利時手数", "勝利時捕食", "勝利時残数", "成り勝ち", "成り勝ち率", "平均手数", "勝者なし", "全滅", "打ち切り", "試合/秒"], summaryRows),
+      "",
+      "# 各モード詳細"
+    ];
+    for (const result of results) {
+      parts.push("", formatSingleStatsCopy(result.stats, result.completed, result.elapsed, maxTurns, result.mode, false));
+    }
+    return parts.join("\n");
+  }
+  function renderStats(stats, completed, elapsedMs, maxTurns, mode = pieceMode) {
+    const avgTurns = completed ? stats.totalTurns / completed : 0;
+    const rows = categoryRowsFromStats(stats, completed, mode).map(row => `
+          <tr>
+            <td><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${row.color};margin-right:5px;"></span>${row.label}</td>
+            <td>${row.initial}</td>
+            <td>${row.wins}</td>
+            <td>${pct(row.wins, completed)}</td>
+            <td>${row.top2}<br><span class="tiny">${pct(row.top2, completed)}</span></td>
+            <td>${row.top3}<br><span class="tiny">${pct(row.top3, completed)}</span></td>
+            <td>${row.survivalGames}<br><span class="tiny">${pct(row.survivalGames, completed)}</span></td>
+            <td>${row.avgKills.toFixed(2)}</td>
+            <td>${row.bestKills}</td>
+            <td>${row.avgRemain.toFixed(2)}</td>
+            <td>${row.avgLost.toFixed(2)}</td>
+            <td>${row.avgWinTurns ? row.avgWinTurns.toFixed(1) : "-"}</td>
+            <td>${row.avgWinKills ? row.avgWinKills.toFixed(2) : "-"}</td>
+            <td>${row.avgWinRemain ? row.avgWinRemain.toFixed(2) : "-"}</td>
+            <td>${row.promotedWins}<br><span class="tiny">${pct(row.promotedWins, Math.max(1, row.wins))}</span></td>
+          </tr>`).join("");
+    statsTableEl.innerHTML = `
+      <table class="stats-table">
+        <thead>
+          <tr>
+            <th>集計</th><th>初期数</th><th>勝</th><th>勝率</th><th>生存Top2</th><th>生存Top3</th><th>最終生存</th>
+            <th>平均捕食</th><th>最多捕食</th><th>平均残数</th><th>平均消滅</th><th>勝利時手数</th><th>勝利時捕食</th><th>勝利時残数</th><th>成り勝ち</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+    const speed = elapsedMs > 0 ? completed / (elapsedMs / 1000) : 0;
+    const shortest = stats.shortest === Infinity ? 0 : stats.shortest;
+    const noWinner = stats.draws + stats.timeouts;
+    statsSummaryEl.innerHTML = `
+      ${modeConfig(mode).label} / ${completed}試合完了 / 平均 ${avgTurns.toFixed(1)}手 / 最短 ${shortest}手 / 最長 ${stats.longest}手<br>
+      全滅 ${stats.draws}、最大${maxTurns}手打ち切り ${stats.timeouts}、勝者なし ${noWinner} (${pct(noWinner, completed)}) / ${speed.toFixed(1)}試合/秒`;
+    lastStatsCopyText = formatSingleStatsCopy(stats, completed, elapsedMs, maxTurns, mode);
+    copyStatsBtn.disabled = completed <= 0;
+  }
+  function renderAllModesSummary(results, totalModes, totalElapsedMs, runs, maxTurns, cancelled = false) {
+    if (!results.length) { allModesTableEl.innerHTML = ""; return; }
+    const totalGames = results.reduce((sum, r) => sum + r.completed, 0);
+    const totalSpeed = totalElapsedMs > 0 ? totalGames / (totalElapsedMs / 1000) : 0;
+    const rows = results.map(result => {
+      const ranking = categoryRowsFromStats(result.stats, result.completed, result.mode);
+      const avgTurns = result.completed ? result.stats.totalTurns / result.completed : 0;
+      const noWinner = result.stats.draws + result.stats.timeouts;
+      const speed = result.elapsed > 0 ? result.completed / (result.elapsed / 1000) : 0;
+      return ranking.map((row, idx) => `
+        <tr>
+          <td>${idx === 0 ? modeConfig(result.mode).label : ""}</td>
+          <td>${idx + 1}</td>
+          <td><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${row.color};margin-right:5px;"></span>${row.label}</td>
+          <td>${row.initial}</td>
+          <td>${row.wins}</td>
+          <td>${pct(row.wins, result.completed)}</td>
+          <td>${row.top2}<br><span class="tiny">${pct(row.top2, result.completed)}</span></td>
+          <td>${row.top3}<br><span class="tiny">${pct(row.top3, result.completed)}</span></td>
+          <td>${row.survivalGames}<br><span class="tiny">${pct(row.survivalGames, result.completed)}</span></td>
+          <td>${row.avgKills.toFixed(2)}</td>
+          <td>${row.bestKills}</td>
+          <td>${row.avgRemain.toFixed(2)}</td>
+          <td>${row.avgWinTurns ? row.avgWinTurns.toFixed(1) : "-"}</td>
+          <td>${row.avgWinKills ? row.avgWinKills.toFixed(2) : "-"}</td>
+          <td>${row.avgWinRemain ? row.avgWinRemain.toFixed(2) : "-"}</td>
+          <td>${row.promotedWins}<br><span class="tiny">${pct(row.promotedWins, Math.max(1, row.wins))}</span></td>
+          <td>${idx === 0 ? avgTurns.toFixed(1) : ""}</td>
+          <td>${idx === 0 ? `${noWinner}<br><span class="tiny">${pct(noWinner, result.completed)}</span>` : ""}</td>
+          <td>${idx === 0 ? result.stats.draws : ""}</td>
+          <td>${idx === 0 ? result.stats.timeouts : ""}</td>
+          <td>${idx === 0 ? speed.toFixed(1) : ""}</td>
+        </tr>`).join("");
+    }).join("");
+    allModesTableEl.innerHTML = `
+      <div class="tiny" style="margin-bottom:8px;">全モード統計まとめ ${cancelled ? "（途中結果）" : ""} / ${results.length}/${totalModes}モード完了 / 総計${totalGames}試合 / 1モード${runs}試合 / 最大${maxTurns}手 / ${totalSpeed.toFixed(1)}試合/秒</div>
+      <table class="stats-table all-modes-table">
+        <thead>
+          <tr>
+            <th>モード</th><th>順位</th><th>集計</th><th>初期数</th><th>勝</th><th>勝率</th><th>Top2</th><th>Top3</th><th>最終生存</th>
+            <th>平均捕食</th><th>最多捕食</th><th>平均残数</th><th>勝利時手数</th><th>勝利時捕食</th><th>勝利時残数</th><th>成り勝ち</th>
+            <th>平均手数</th><th>勝者なし</th><th>全滅</th><th>打ち切り</th><th>試合/秒</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+    lastStatsCopyText = formatAllModesCopy(results, totalModes, totalElapsedMs, runs, maxTurns, cancelled);
+    copyStatsBtn.disabled = results.length <= 0;
+  }
+  async function copyStatsToClipboard() {
+    const text = lastStatsCopyText.trim();
+    if (!text) return;
+    const original = copyStatsBtn.textContent;
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const area = document.createElement("textarea");
+        area.value = text;
+        area.style.position = "fixed";
+        area.style.left = "-9999px";
+        document.body.appendChild(area);
+        area.focus();
+        area.select();
+        document.execCommand("copy");
+        document.body.removeChild(area);
+      }
+      copyStatsBtn.textContent = "コピー完了";
+    } catch (err) {
+      console.error(err);
+      copyStatsBtn.textContent = "コピー失敗";
+    }
+    setTimeout(() => { copyStatsBtn.textContent = original; }, 1200);
+  }
+  async function computeStatsForMode(mode, runs, maxTurns, onProgress) {
+    pieceMode = mode;
+    setupModeInput.value = mode;
+    const stats = blankStatsForMode(mode);
+    const cats = activeCategoryKeys(mode);
+    const start = performance.now();
+    let completed = 0;
+    while (completed < runs && !statsCancelRequested) {
+      const chunkStart = performance.now();
+      do {
+        const result = runOneHeadlessGame(maxTurns);
+        completed++;
+        stats.totalTurns += result.turns;
+        stats.longest = Math.max(stats.longest, result.turns);
+        stats.shortest = Math.min(stats.shortest, result.turns);
+        if (result.timeout) stats.timeouts++;
+        if (!result.winnerCategory && !result.timeout) stats.draws++;
+        if (result.winnerCategory && stats.cats[result.winnerCategory]) {
+          const w = stats.cats[result.winnerCategory];
+          w.wins++;
+          w.winTurnsSum += result.turns;
+          w.winKillsSum += result.kills[result.winnerCategory] || 0;
+          w.winRemainingSum += result.remaining[result.winnerCategory] || 0;
+        }
+        const top2 = result.finishOrder.slice(0, 2);
+        const top3 = result.finishOrder.slice(0, 3);
+        for (const cat of cats) {
+          const s = stats.cats[cat];
+          const kills = result.kills[cat] || 0;
+          const remain = result.remaining[cat] || 0;
+          s.kills += kills;
+          s.survivalSum += remain;
+          s.bestKills = Math.max(s.bestKills, kills);
+          s.bestRemaining = Math.max(s.bestRemaining, remain);
+          if (kills === 0) s.zeroKillGames++;
+          if (remain > 0) s.survivalGames++;
+          if (top2.includes(cat)) s.top2++;
+          if (top3.includes(cat)) s.top3++;
+          if (result.winnerCategory === cat && (result.promotedRemaining[cat] || 0) > 0) s.promotedWins++;
+        }
+      } while (completed < runs && performance.now() - chunkStart < 28 && !statsCancelRequested);
+      const elapsed = performance.now() - start;
+      if (onProgress) onProgress({ mode, stats, completed, runs, elapsed, maxTurns });
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    return { mode, stats, completed, elapsed: performance.now() - start, maxTurns, cancelled: statsCancelRequested };
+  }
+  function setStatsBusy(busy) {
+    runStatsBtn.disabled = busy;
+    runAllStatsBtn.disabled = busy;
+    cancelStatsBtn.disabled = !busy;
+  }
+  async function runStats() {
+    if (statsRunning) return;
+    const runs = Math.max(1, Math.min(10000, Number(statsRunsInput.value) || 1000));
+    const maxTurns = Math.max(50, Math.min(20000, Number(statsMaxTurnsInput.value) || 2000));
+    statsRunsInput.value = runs;
+    statsMaxTurnsInput.value = maxTurns;
+    const saved = snapshotState();
+    const mode = pieceMode;
+    statsRunning = true;
+    statsCancelRequested = false;
+    setRunning(false);
+    setStatsBusy(true);
+    statsProgressBar.style.width = "0%";
+    allModesTableEl.innerHTML = "";
+    lastStatsCopyText = "";
+    copyStatsBtn.disabled = true;
+    statsSummaryEl.textContent = "統計計算中…描画なしで内部処理だけを実行しています。";
+    try {
+      const result = await computeStatsForMode(mode, runs, maxTurns, ({ stats, completed, runs, elapsed, maxTurns }) => {
+        statsProgressBar.style.width = `${Math.floor(completed / runs * 100)}%`;
+        renderStats(stats, completed, elapsed, maxTurns, mode);
+      });
+      renderStats(result.stats, result.completed, result.elapsed, maxTurns, mode);
+      statsProgressBar.style.width = result.completed ? `${Math.floor(result.completed / runs * 100)}%` : "0%";
+      if (statsCancelRequested) statsSummaryEl.innerHTML += "<br>中止しました。ここまでの結果です。";
+    } finally {
+      restoreState(saved);
+      statsRunning = false;
+      statsCancelRequested = false;
+      setStatsBusy(false);
+    }
+  }
+  async function runAllStats() {
+    if (statsRunning) return;
+    const runs = Math.max(1, Math.min(10000, Number(statsRunsInput.value) || 1000));
+    const maxTurns = Math.max(50, Math.min(20000, Number(statsMaxTurnsInput.value) || 2000));
+    const modes = Object.keys(MODES);
+    statsRunsInput.value = runs;
+    statsMaxTurnsInput.value = maxTurns;
+    const saved = snapshotState();
+    statsRunning = true;
+    statsCancelRequested = false;
+    setRunning(false);
+    setStatsBusy(true);
+    statsProgressBar.style.width = "0%";
+    statsTableEl.innerHTML = "";
+    allModesTableEl.innerHTML = "";
+    lastStatsCopyText = "";
+    copyStatsBtn.disabled = true;
+    statsSummaryEl.textContent = "全モード統計を準備中…";
+    const results = [];
+    const overallStart = performance.now();
+    try {
+      for (let i = 0; i < modes.length && !statsCancelRequested; i++) {
+        const mode = modes[i];
+        const result = await computeStatsForMode(mode, runs, maxTurns, ({ stats, completed, runs, elapsed, maxTurns }) => {
+          const overallFraction = (i + completed / runs) / modes.length;
+          statsProgressBar.style.width = `${Math.floor(overallFraction * 100)}%`;
+          renderStats(stats, completed, elapsed, maxTurns, mode);
+          statsSummaryEl.innerHTML = `全モード統計計算中… ${modeConfig(mode).label} (${i + 1}/${modes.length}) / ${completed}/${runs}試合`;
+          renderAllModesSummary(results, modes.length, performance.now() - overallStart, runs, maxTurns, true);
+        });
+        results.push(result);
+        renderAllModesSummary(results, modes.length, performance.now() - overallStart, runs, maxTurns, statsCancelRequested);
+      }
+      const totalElapsed = performance.now() - overallStart;
+      const doneModes = results.length;
+      const totalGames = results.reduce((sum, r) => sum + r.completed, 0);
+      statsSummaryEl.innerHTML = `${statsCancelRequested ? "全モード統計を中止しました。" : "全モード統計が完了しました。"} ${doneModes}/${modes.length}モード / 総計${totalGames}試合 / ${(totalGames / Math.max(0.001, totalElapsed / 1000)).toFixed(1)}試合/秒`;
+      statsProgressBar.style.width = `${Math.floor(doneModes / modes.length * 100)}%`;
+    } finally {
+      restoreState(saved);
+      statsRunning = false;
+      statsCancelRequested = false;
+      setStatsBusy(false);
+    }
+  }
+
+  function setRunning(v) { running = v && !gameOver; toggleBtn.textContent = running ? "⏸ 停止" : "▶ 開始"; }
+  function loop(now) {
+    if (statsRunning) { lastFrame = now; requestAnimationFrame(loop); return; }
+    resizeCanvas();
+    const dt = now - lastFrame;
+    lastFrame = now;
+    if (running && !gameOver) {
+      accumulator += dt;
+      const interval = 1000 / Number(speedInput.value);
+      let safety = 0;
+      while (accumulator >= interval && safety < 20) { simulationStep(); accumulator -= interval; safety++; }
+      if (safety) draw();
+    } else if (marks.length) {
+      marks.forEach(m => m.life -= .25);
+      marks = marks.filter(m => m.life > 0);
+      draw();
+    }
+    requestAnimationFrame(loop);
+  }
+
+  toggleBtn.addEventListener("click", () => setRunning(!running));
+  stepBtn.addEventListener("click", () => { setRunning(false); simulationStep(); });
+  resetBtn.addEventListener("click", () => { setRunning(false); reset(); });
+  setupModeInput.addEventListener("change", () => { pieceMode = setupModeInput.value; setRunning(false); reset(); });
+  fastBtn.addEventListener("click", () => { speedInput.value = speedInput.value < 45 ? 45 : 6; updateUI(); });
+  speedInput.addEventListener("input", updateUI);
+  runStatsBtn.addEventListener("click", runStats);
+  runAllStatsBtn.addEventListener("click", runAllStats);
+  copyStatsBtn.addEventListener("click", copyStatsToClipboard);
+  cancelStatsBtn.addEventListener("click", () => { statsCancelRequested = true; });
+  canvas.addEventListener("click", (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const dprX = canvas.width / rect.width;
+    const dprY = canvas.height / rect.height;
+    const x = Math.floor((e.clientX - rect.left) * dprX / (canvas.width / BOARD));
+    const y = Math.floor((e.clientY - rect.top) * dprY / (canvas.height / BOARD));
+    selected = { x: wrap(x), y: wrap(y) };
+    inspectSelected();
+    draw();
+  });
+  window.addEventListener("keydown", (e) => {
+    if (e.code === "Space") { e.preventDefault(); setRunning(!running); }
+    else if (e.code === "ArrowRight") { e.preventDefault(); setRunning(false); simulationStep(); }
+  });
+
+  reset();
+  requestAnimationFrame(loop);
+})();
+
+</script>
+</body>
+</html>
